@@ -3,7 +3,8 @@
   "package": "com.eason.zcore.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ExampleMixin"
+    "ExampleMixin",
+    "PlayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

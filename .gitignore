@@ -9,6 +9,9 @@ run/
 remappedSrc/
 .fabric/
 
+# Local reference sources (Minecraft / Meteor Client)
+sources/
+
 # IntelliJ IDEA
 .idea/
 *.iml

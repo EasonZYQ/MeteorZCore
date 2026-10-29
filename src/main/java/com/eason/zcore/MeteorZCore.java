@@ -1,12 +1,10 @@
 package com.eason.zcore;
 
-import com.eason.zcore.commands.CommandExample;
 import com.eason.zcore.hud.HudExample;
-import com.eason.zcore.modules.ModuleExample;
+import com.eason.zcore.modules.ZReach;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
-import meteordevelopment.meteorclient.commands.Commands;
 import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudGroup;
 import meteordevelopment.meteorclient.systems.modules.Category;
@@ -15,18 +13,15 @@ import org.slf4j.Logger;
 
 public class MeteorZCore extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
-    public static final Category CATEGORY = new Category("ZCore");
-    public static final HudGroup HUD_GROUP = new HudGroup("ZCore");
+    public static final Category CATEGORY = new Category("Z Core");
+    public static final HudGroup HUD_GROUP = new HudGroup("Z Core");
 
     @Override
     public void onInitialize() {
         LOG.info("Initializing MeteorZCore");
 
         // Modules
-        Modules.get().add(new ModuleExample());
-
-        // Commands
-        Commands.add(new CommandExample());
+        Modules.get().add(new ZReach());
 
         // HUD
         Hud.get().register(HudExample.INFO);

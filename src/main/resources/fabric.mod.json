@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "id": "addon-template",
+  "id": "meteor-zcore",
   "version": "${version}",
-  "name": "Addon Template",
-  "description": "An addon template for Meteor Client addons.",
+  "name": "MeteorZCore",
+  "description": "MeteorZCore addon for Meteor Client.",
   "authors": [
-    "seasnail"
+    "EasonZYQ"
   ],
   "contact": {
-    "sources": "https://github.com/MeteorDevelopment/meteor-addon-template"
+    "sources": "https://github.com/EasonZYQ/MeteorZCore"
   },
-  "icon": "assets/template/icon.png",
+  "icon": "assets/zcore/icon.png",
   "environment": "client",
   "entrypoints": {
     "meteor": [
-      "com.example.addon.AddonTemplate"
+      "com.eason.zcore.MeteorZCore"
     ]
   },
   "mixins": [
-    "addon-template.mixins.json"
+    "zcore.mixins.json"
   ],
   "custom": {
     "meteor-client:color": "225,25,25",

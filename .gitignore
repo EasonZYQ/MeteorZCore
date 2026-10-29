@@ -1,33 +1,38 @@
-# gradle
-
+# Gradle
 .gradle/
 build/
 out/
 classes/
 
-# eclipse
+# Fabric Loom
+run/
+remappedSrc/
+.fabric/
 
-*.launch
-
-# idea
-
+# IntelliJ IDEA
 .idea/
 *.iml
 *.ipr
 *.iws
 
-# vscode
-
+# Eclipse
+*.launch
 .settings/
-.vscode/
-bin/
 .classpath
 .project
+bin/
 
-# macos
+# VS Code
+.vscode/
 
-*.DS_Store
+# macOS
+.DS_Store
 
-# fabric
+# Windows
+Thumbs.db
+desktop.ini
 
-run/
+# Logs and crash dumps
+*.log
+hs_err_pid*
+*.hprof

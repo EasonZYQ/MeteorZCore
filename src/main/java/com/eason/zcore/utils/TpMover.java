@@ -43,6 +43,8 @@ public final class TpMover {
     private static Vec3 verifyTarget;
     /** 直传验证剩余等待 tick 数。 */
     private static int verifyWait;
+    /** 是否强制在位置包里声明玩家处于空中。 */
+    private static boolean forceAirborne;
 
     /**
      * 私有构造方法，禁止实例化该工具类。
@@ -77,6 +79,15 @@ public final class TpMover {
     }
 
     /**
+     * 设置是否强制在位置包里声明玩家处于空中。
+     *
+     * @param value 为 true 时所有位置包的 onGround 都为 false
+     */
+    public static void setForceAirborne(boolean value) {
+        forceAirborne = value;
+    }
+
+    /**
      * 重新开始直传探测，切换服务器或维度后调用。
      */
     public static void resetDetection() {
@@ -93,6 +104,7 @@ public final class TpMover {
         busy = false;
         verifyTarget = null;
         verifyWait = 0;
+        forceAirborne = false;
         PositionSpoofer.setHolding(false);
     }
 
@@ -225,7 +237,7 @@ public final class TpMover {
         if (PositionSpoofer.isLocked()) return false;
 
         // 发送位置包，此时尚未占用 tick 组，不会被取消逻辑拦截
-        mc.getConnection().send(new ServerboundMovePlayerPacket.Pos(pos.x, pos.y, pos.z, mc.player.onGround(), mc.player.horizontalCollision));
+        mc.getConnection().send(new ServerboundMovePlayerPacket.Pos(pos.x, pos.y, pos.z, !forceAirborne && mc.player.onGround(), mc.player.horizontalCollision));
         // 发送完成后占用本 tick 组
         PositionSpoofer.lock();
 

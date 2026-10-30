@@ -1,6 +1,10 @@
 name: Publish Development Build
 on: push
 
+# 允许 GITHUB_TOKEN 创建/更新 Release（默认权限是只读）
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest

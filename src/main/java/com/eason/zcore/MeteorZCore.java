@@ -1,14 +1,27 @@
 package com.eason.zcore;
 
+import com.eason.zcore.modules.ZAntiExplosion;
+import com.eason.zcore.modules.ZAutoExperience;
+import com.eason.zcore.modules.ZAutoSpammer;
+import com.eason.zcore.modules.ZBowAura;
+import com.eason.zcore.modules.ZChatCommand;
 import com.eason.zcore.modules.ZClickTp;
+import com.eason.zcore.modules.ZEncryptMessage;
 import com.eason.zcore.modules.ZFreecam;
+import com.eason.zcore.modules.ZHornAura;
 import com.eason.zcore.modules.ZMaceTp;
+import com.eason.zcore.modules.ZNuker;
 import com.eason.zcore.modules.ZPacketMine;
 import com.eason.zcore.modules.ZPistonAura;
+import com.eason.zcore.modules.ZRandomMove;
 import com.eason.zcore.modules.ZReach;
+import com.eason.zcore.modules.ZSpeed;
+import com.eason.zcore.modules.ZSurround;
 import com.eason.zcore.modules.ZTPAnchorAura;
 import com.eason.zcore.modules.ZTPAura;
 import com.eason.zcore.modules.ZTPCrystalAura;
+import com.eason.zcore.modules.ZTrap;
+import com.eason.zcore.modules.ZWebAura;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
@@ -54,6 +67,32 @@ public class MeteorZCore extends MeteorAddon {
         Modules.get().add(new ZClickTp());
         // 将 Z Mace Tp 模块注册到 Meteor 的模块系统
         Modules.get().add(new ZMaceTp());
+        // 将 Z Horn Aura 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZHornAura());
+        // 将 Z Auto Experience 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZAutoExperience());
+        // 将 Z Auto Spammer 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZAutoSpammer());
+        // 将 Z Encrypt Message 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZEncryptMessage());
+        // 将 Z Chat Command 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZChatCommand());
+        // 将 Z Nuker 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZNuker());
+        // 将 Z Surround 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZSurround());
+        // 将 Z Speed 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZSpeed());
+        // 将 Z Random Move 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZRandomMove());
+        // 将 Z Bow Aura 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZBowAura());
+        // 将 Z Trap 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZTrap());
+        // 将 Z Web Aura 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZWebAura());
+        // 将 Z Anti Explosion 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZAntiExplosion());
     }
 
     /**

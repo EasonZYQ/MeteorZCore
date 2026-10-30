@@ -68,6 +68,15 @@ public final class TpMover {
     }
 
     /**
+     * 返回当前传送任务的目的地。
+     *
+     * @return 目的坐标，没有任务时返回 null
+     */
+    public static Vec3 destination() {
+        return destination;
+    }
+
+    /**
      * 重新开始直传探测，切换服务器或维度后调用。
      */
     public static void resetDetection() {

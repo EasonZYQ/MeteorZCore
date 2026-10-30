@@ -1,5 +1,6 @@
 package com.eason.zcore;
 
+import com.eason.zcore.modules.ZClickTp;
 import com.eason.zcore.modules.ZFreecam;
 import com.eason.zcore.modules.ZPacketMine;
 import com.eason.zcore.modules.ZPistonAura;
@@ -48,6 +49,8 @@ public class MeteorZCore extends MeteorAddon {
         Modules.get().add(new ZPacketMine());
         // 将 Z Piston Aura 模块注册到 Meteor 的模块系统
         Modules.get().add(new ZPistonAura());
+        // 将 Z Click Tp 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZClickTp());
     }
 
     /**

@@ -12,6 +12,12 @@ remappedSrc/
 # Local reference sources (Minecraft / Meteor Client)
 sources/
 
+# Third-party reference addons (decompiled / bytecode)
+GCore/
+GCoreClass/
+GgBoy/
+lotus/
+
 # IntelliJ IDEA
 .idea/
 *.iml

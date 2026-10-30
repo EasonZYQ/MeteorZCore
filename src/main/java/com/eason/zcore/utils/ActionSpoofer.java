@@ -63,6 +63,8 @@ public final class ActionSpoofer {
     public static void handleSend(PacketEvent.Send event, Policy policy) {
         // 先处理位置包本身，若是位置包则直接返回
         if (PositionSpoofer.handleSend(event)) return;
+        // 传送引擎正在控制服务端位置时，不再做普通伪造
+        if (TpMover.isBusy()) return;
         // 玩家或世界不存在、或本 tick 组已被位置包占用时不再处理
         if (mc.player == null || mc.level == null || PositionSpoofer.isLocked()) return;
 

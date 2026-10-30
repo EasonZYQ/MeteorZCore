@@ -29,6 +29,8 @@ public final class PositionSpoofer {
     private static boolean positionSent;
     /** 是否存在需要在本 tick 结束后还原的伪造坐标。 */
     private static boolean pendingRestore;
+    /** 多 tick 移动期间为 true，此时每个 tick 结束都不还原坐标。 */
+    private static boolean holding;
 
     /**
      * 私有构造方法，禁止外部实例化该工具类。
@@ -45,6 +47,38 @@ public final class PositionSpoofer {
     }
 
     /**
+     * 占用当前 tick 组，供自行发送位置包的调用方使用。
+     */
+    public static void lock() {
+        positionSent = true;
+    }
+
+    /**
+     * 解除当前 tick 组的占用，允许下一个位置包通过。
+     */
+    public static void unlock() {
+        positionSent = false;
+    }
+
+    /**
+     * 设置多 tick 移动状态。
+     *
+     * @param value 为 true 时每个 tick 结束都不再自动还原坐标
+     */
+    public static void setHolding(boolean value) {
+        holding = value;
+    }
+
+    /**
+     * 返回是否处于多 tick 移动状态。
+     *
+     * @return 多 tick 移动期间返回 true
+     */
+    public static boolean isHolding() {
+        return holding;
+    }
+
+    /**
      * 处理发包事件：占用期间取消所有位置包。
      *
      * @param event 发包事件
@@ -53,8 +87,8 @@ public final class PositionSpoofer {
     public static boolean handleSend(PacketEvent.Send event) {
         // 只处理真正携带坐标的移动包，纯旋转包不占用位置包名额
         if (event.packet instanceof ServerboundMovePlayerPacket packet && packet.hasPosition()) {
-            // 本 tick 组已有位置包时，取消客户端自动发送的这个位置包
-            if (positionSent) event.cancel();
+            // 本 tick 组已有位置包，或正在多 tick 移动时，取消客户端自动发送的这个位置包
+            if (positionSent || holding) event.cancel();
             return true;
         }
 
@@ -72,6 +106,13 @@ public final class PositionSpoofer {
     public static void handleSent(PacketEvent.Sent event) {
         // 仅处理客户端 tick 结束包
         if (!(event.packet instanceof ServerboundClientTickEndPacket)) return;
+
+        // 多 tick 移动期间不还原坐标，只解除占用让下一个 tick 继续推进
+        if (holding) {
+            positionSent = false;
+            pendingRestore = false;
+            return;
+        }
 
         // 没有待还原的坐标时直接解锁，允许之后发送正常位置包
         if (!pendingRestore) {

@@ -3,6 +3,7 @@ package com.eason.zcore.modules;
 import com.eason.zcore.MeteorZCore;
 import com.eason.zcore.utils.ActionSpoofer;
 import com.eason.zcore.utils.PositionSpoofer;
+import com.eason.zcore.utils.TpMover;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -42,17 +43,17 @@ import java.util.Set;
  * Z TP Aura 模块。
  * <p>
  * 模仿 Meteor 自带的 KillAura：自动搜索周围符合条件的目标、转向并攻击。
- * 区别在于当目标超出服务端允许的攻击距离时，会先发送一个伪造位置包，
- * 让服务端误以为玩家已经站到目标旁边，攻击完成后再在 tick 结束时还原坐标。
- * <p>
- * 位置包的发送与还原统一交给 {@link PositionSpoofer} 管理，
- * 避免与 Z Reach 同时开启时出现一个 tick 内两个位置包的情况。
+ * 当目标超出服务端允许的攻击距离时，交给 {@link TpMover} 把服务端位置送到目标旁，
+ * 攻击完成后再走回原处。TpMover 会先探测服务器是否允许超远距离直传，
+ * 不允许时自动改为每 tick 前进一段距离的分段传送。
  */
 public class ZTPAura extends Module implements ActionSpoofer.Policy {
     /** 原版服务端允许的实体攻击距离：3.0 格基础距离加 3.0 格缓冲。 */
     private static final double SERVER_ATTACK_RANGE = 6.0;
     /** 原版攻击冷却的取值参数，用于判断攻击是否已经蓄力完成。 */
     private static final float ATTACK_COOLDOWN_ADJUST = 0.5F;
+    /** 传送到目标旁时与目标碰撞箱保持的最大距离。 */
+    private static final double TP_OFFSET = 5.0;
 
     /** 默认设置分组。 */
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -66,7 +67,7 @@ public class ZTPAura extends Module implements ActionSpoofer.Policy {
         // 设置项说明
         .description("The maximum distance at which an entity can be attacked.")
         // 默认值
-        .defaultValue(10.0)
+        .defaultValue(100.0)
         // 允许输入的数值范围
         .range(0.0, 1000.0)
         // 滑条显示的数值范围
@@ -167,26 +168,47 @@ public class ZTPAura extends Module implements ActionSpoofer.Policy {
 
     /** 本 tick 筛选出的目标列表。 */
     private final List<Entity> targets = new ArrayList<>();
+    /** 当前传送任务的目的地。 */
+    private Vec3 travelTarget;
+    /** 是否处于回程阶段。 */
+    private boolean returning;
 
     /**
      * 构造方法，完成模块注册信息。
      */
     public ZTPAura() {
         // 调用父类构造：传入分类、模块名与描述
-        super(MeteorZCore.CATEGORY, "z-tp-aura", "Attacks entities around you like KillAura and teleports next to distant targets using movement packets.");
+        super(MeteorZCore.CATEGORY, "z-tp-aura", "Attacks entities around you like KillAura and teleports next to distant targets.");
     }
 
     /**
-     * 模块关闭时清空目标列表。
+     * 模块启用时调用，重置传送引擎状态。
+     */
+    @Override
+    public void onActivate() {
+        // 清空传送任务相关字段
+        travelTarget = null;
+        returning = false;
+        // 重置引擎与直传探测
+        TpMover.reset();
+        TpMover.resetDetection();
+    }
+
+    /**
+     * 模块关闭时调用，中止传送并清空目标。
      */
     @Override
     public void onDeactivate() {
+        // 中止正在进行的传送
+        TpMover.abort();
         // 清空本 tick 缓存的目标
         targets.clear();
+        travelTarget = null;
+        returning = false;
     }
 
     /**
-     * 每个客户端 tick 开始时调用，负责搜索目标、转向并执行攻击。
+     * 每个客户端 tick 开始时调用，负责移动、搜索目标与攻击。
      *
      * @param event tick 前事件
      */
@@ -196,6 +218,43 @@ public class ZTPAura extends Module implements ActionSpoofer.Policy {
         if (mc.player == null || mc.level == null || mc.gameMode == null) return;
         // 玩家已死亡或处于旁观模式时不执行攻击
         if (!mc.player.isAlive() || PlayerUtils.getGameMode() == GameType.SPECTATOR) return;
+
+        // 传送任务进行中
+        if (TpMover.isBusy()) {
+            // 不是本模块发起的传送，等待它结束
+            if (travelTarget == null) return;
+
+            // 推进传送，未到达时直接返回
+            if (!TpMover.moveTo(travelTarget)) return;
+
+            // 回程完成，结束本次任务
+            if (returning) {
+                travelTarget = null;
+                returning = false;
+                TpMover.reset();
+                return;
+            }
+
+            // 到达攻击点后必须等攻击冷却完成
+            if (mc.player.getAttackStrengthScale(ATTACK_COOLDOWN_ADJUST) < 1.0F) return;
+
+            // 命中时转向模式：攻击前把视角转向主要目标
+            if (rotation.get() == RotationMode.OnHit && !targets.isEmpty()) {
+                Entity primary = targets.getFirst();
+                Rotations.rotate(Rotations.getYaw(primary), Rotations.getPitch(primary, Target.Body));
+            }
+
+            // 依次攻击仍在存活的目标
+            for (Entity target : targets) {
+                if (target.isAlive()) attack(target);
+            }
+
+            // 记录回程目标并开始返回
+            returning = true;
+            travelTarget = TpMover.origin();
+            return;
+        }
+
         // 开启“仅按住左键”时，未按住左键则直接返回
         if (onlyOnClick.get() && !mc.options.keyAttack.isDown()) return;
 
@@ -211,11 +270,10 @@ public class ZTPAura extends Module implements ActionSpoofer.Policy {
 
         // 设置为始终转向时，先把视角转向主要目标
         if (rotation.get() == RotationMode.Always) {
-            // 调用旋转工具，传入水平角和俯仰角
             Rotations.rotate(Rotations.getYaw(primary), Rotations.getPitch(primary, Target.Body));
         }
 
-        // 攻击尚未蓄力完成时先不攻击，避免浪费一次伪造坐标
+        // 攻击尚未蓄力完成时先不攻击
         if (mc.player.getAttackStrengthScale(ATTACK_COOLDOWN_ADJUST) < 1.0F) return;
 
         // 缓存玩家眼睛位置，用于计算到目标的距离
@@ -223,16 +281,36 @@ public class ZTPAura extends Module implements ActionSpoofer.Policy {
         // 计算眼睛到主要目标碰撞箱的平方距离
         double distanceSq = primary.getBoundingBox().distanceToSqr(eye);
 
-        // 目标超出服务端允许的攻击距离时，攻击包会由共享工具类自动插入伪造坐标；
-        // 本 tick 组已被位置包占用时先等待，避免白白浪费一次攻击冷却
-        if (distanceSq > SERVER_ATTACK_RANGE * SERVER_ATTACK_RANGE && PositionSpoofer.isLocked()) return;
+        // 目标在服务端允许的范围内，直接攻击
+        if (distanceSq <= SERVER_ATTACK_RANGE * SERVER_ATTACK_RANGE) {
+            for (Entity target : targets) attack(target);
+            return;
+        }
 
-        // 依次攻击所有筛选出的目标
-        for (Entity target : targets) attack(target);
+        // 远距离目标：计算目标旁可站立的攻击点
+        Vec3 feet = PositionSpoofer.feetNear(primary.getBoundingBox(), TP_OFFSET);
+        // 找不到可用位置时放弃本次攻击
+        if (feet == null) return;
+
+        // 记录传送目标并启动传送任务
+        travelTarget = feet;
+        returning = false;
+        TpMover.moveTo(feet);
     }
 
     /**
-     * 监听发包事件，把位置包的管理交给共享工具类。
+     * 监听收包事件，让传送引擎判断直传是否被服务端拒绝。
+     *
+     * @param event 收包事件
+     */
+    @EventHandler
+    private void onReceive(PacketEvent.Receive event) {
+        // 交给传送引擎判断是否收到位置校正
+        TpMover.handleReceive(event);
+    }
+
+    /**
+     * 监听发包事件，把位置包与动作包的管理交给共享工具类。
      *
      * @param event 发包事件
      */
@@ -280,12 +358,6 @@ public class ZTPAura extends Module implements ActionSpoofer.Policy {
      * @param target 攻击目标
      */
     private void attack(Entity target) {
-        // 设置为命中时转向时，在攻击瞬间把视角转向该目标
-        if (rotation.get() == RotationMode.OnHit) {
-            // 调用旋转工具，传入水平角和俯仰角
-            Rotations.rotate(Rotations.getYaw(target), Rotations.getPitch(target, Target.Body));
-        }
-
         // 通过游戏模式对象发送攻击包并处理客户端预测
         mc.gameMode.attack(mc.player, target);
         // 同时播放客户端与服务端的挥手动画

@@ -1,6 +1,7 @@
 package com.eason.zcore;
 
 import com.eason.zcore.modules.ZFreecam;
+import com.eason.zcore.modules.ZPacketMine;
 import com.eason.zcore.modules.ZReach;
 import com.eason.zcore.modules.ZTPAnchorAura;
 import com.eason.zcore.modules.ZTPAura;
@@ -42,6 +43,8 @@ public class MeteorZCore extends MeteorAddon {
         Modules.get().add(new ZTPAnchorAura());
         // 将 Z Freecam 模块注册到 Meteor 的模块系统
         Modules.get().add(new ZFreecam());
+        // 将 Z Packet Mine 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZPacketMine());
     }
 
     /**

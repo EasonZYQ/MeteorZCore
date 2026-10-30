@@ -28,7 +28,7 @@ $env:JAVA_HOME="C:\Program Files\Java\zuluJDK-25"
 src/main/java/com/eason/zcore
 │── MeteorZCore.java        # 插件入口（fabric.mod.json 的 meteor entrypoint）
 │── mixin/                  # Mixin，配置见 zcore.mixins.json
-│── modules/                # 模块（Z Reach、Z TP Aura、Z TP Crystal Aura、Z TP Anchor Aura、Z Freecam、Z Packet Mine）
+│── modules/                # 模块（Z Reach、Z TP Aura、Z TP Crystal Aura、Z TP Anchor Aura、Z Piston Aura、Z Freecam、Z Packet Mine）
 ╰── utils/                  # 工具类（位置伪造、动作伪造、多 tick 传送引擎）
 ```
 

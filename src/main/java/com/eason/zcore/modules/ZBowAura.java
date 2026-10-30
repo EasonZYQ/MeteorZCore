@@ -1,6 +1,9 @@
 package com.eason.zcore.modules;
 
 import com.eason.zcore.MeteorZCore;
+import com.eason.zcore.utils.PositionSpoofer;
+import com.eason.zcore.utils.TpMover;
+import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -19,12 +22,15 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Z Bow Aura 模块。
  * <p>
- * 参考 GCore 的 GBowGod 与 GTpBowAura：自动搜索目标、转向并完成弓箭的蓄力与释放。
- * 拉满弓后自动松手射击，射击后按配置的延迟再次开始蓄力。
+ * 合并 GCore 的 GBowGod 与 GTpBowAura：
+ * 自动搜索目标、转向、拉满弓后射击（满蓄力保证弓箭伤害最大），
+ * 可选先由 {@link TpMover} 把服务端位置送到目标附近，让远距离目标也能稳定命中；
+ * 目标失效后回到原处。
  */
 public class ZBowAura extends Module {
     /** 默认设置分组。 */
@@ -37,16 +43,60 @@ public class ZBowAura extends Module {
         // 设置项说明
         .description("The maximum distance at which targets are searched.")
         // 默认值
-        .defaultValue(50.0)
+        .defaultValue(100.0)
         // 允许输入的数值范围
         .range(0.0, 1000.0)
         // 滑条显示的数值范围
-        .sliderRange(5.0, 100.0)
+        .sliderRange(5.0, 200.0)
         // 构建出设置对象
         .build()
     );
 
-    /** 自动切换弓箭的延迟（tick）。 */
+    /** 是否在射击前传送到目标附近。 */
+    private final Setting<Boolean> tp = sgGeneral.add(new BoolSetting.Builder()
+        // 设置项名称
+        .name("tp")
+        // 设置项说明
+        .description("Teleports close to the target before shooting so arrows land reliably.")
+        // 默认开启
+        .defaultValue(true)
+        // 构建出设置对象
+        .build()
+    );
+
+    /** 传送到目标旁射击时保持的距离。 */
+    private final Setting<Double> tpDistance = sgGeneral.add(new DoubleSetting.Builder()
+        // 设置项名称
+        .name("tp-distance")
+        // 设置项说明
+        .description("The distance from the target kept after teleporting.")
+        // 默认值
+        .defaultValue(8.0)
+        // 允许输入的数值范围
+        .range(3.0, 30.0)
+        // 滑条显示的数值范围
+        .sliderRange(4.0, 15.0)
+        // 只有开启传送时可见
+        .visible(tp::get)
+        // 构建出设置对象
+        .build()
+    );
+
+    /** 蓄力完成所需的 tick 数，20 tick 为满蓄力最大伤害。 */
+    private final Setting<Integer> chargeTicks = sgGeneral.add(new IntSetting.Builder()
+        // 设置项名称
+        .name("charge-ticks")
+        // 设置项说明
+        .description("How many ticks to draw the bow; 20 ticks is a full charge for maximum damage.")
+        // 默认值
+        .defaultValue(20)
+        // 允许输入的数值范围
+        .range(3, 30)
+        // 构建出设置对象
+        .build()
+    );
+
+    /** 射击后的延迟（tick）。 */
     private final Setting<Integer> shootDelay = sgGeneral.add(new IntSetting.Builder()
         // 设置项名称
         .name("shoot-delay")
@@ -56,20 +106,6 @@ public class ZBowAura extends Module {
         .defaultValue(5)
         // 允许输入的数值范围
         .range(0, 40)
-        // 构建出设置对象
-        .build()
-    );
-
-    /** 蓄力完成所需的 tick 数。 */
-    private final Setting<Integer> chargeTicks = sgGeneral.add(new IntSetting.Builder()
-        // 设置项名称
-        .name("charge-ticks")
-        // 设置项说明
-        .description("How many ticks the bow must be drawn before shooting.")
-        // 默认值
-        .defaultValue(20)
-        // 允许输入的数值范围
-        .range(3, 30)
         // 构建出设置对象
         .build()
     );
@@ -100,6 +136,10 @@ public class ZBowAura extends Module {
 
     /** 当前目标玩家。 */
     private Player target;
+    /** 当前传送任务的目的地。 */
+    private Vec3 travelTarget;
+    /** 是否处于回程阶段。 */
+    private boolean returning;
     /** 射击后的剩余延迟。 */
     private int shootDelayLeft;
     /** 自动切换前保存的槽位。 */
@@ -110,7 +150,7 @@ public class ZBowAura extends Module {
      */
     public ZBowAura() {
         // 调用父类构造：传入分类、模块名与描述
-        super(MeteorZCore.CATEGORY, "z-bow-aura", "Automatically aims and shoots a bow at nearby players.");
+        super(MeteorZCore.CATEGORY, "z-bow-aura", "Aims and fully charges a bow for maximum damage; optionally teleports close so shots land.");
     }
 
     /**
@@ -118,14 +158,18 @@ public class ZBowAura extends Module {
      */
     @Override
     public void onActivate() {
-        // 清空目标与计数
+        // 清空任务与传送状态
         target = null;
+        travelTarget = null;
+        returning = false;
         shootDelayLeft = 0;
         previousSlot = -1;
+        TpMover.reset();
+        TpMover.resetDetection();
     }
 
     /**
-     * 模块关闭时调用，停止拉弓并切回原槽位。
+     * 模块关闭时调用，停止拉弓、切回槽位并中止传送。
      */
     @Override
     public void onDeactivate() {
@@ -139,10 +183,15 @@ public class ZBowAura extends Module {
             InvUtils.swap(previousSlot, false);
             previousSlot = -1;
         }
+
+        // 中止正在进行的传送
+        TpMover.abort();
+        travelTarget = null;
+        returning = false;
     }
 
     /**
-     * 每个客户端 tick 开始时调用，负责瞄准与射击。
+     * 每个客户端 tick 开始时调用，负责移动、瞄准与射击。
      *
      * @param event tick 前事件
      */
@@ -151,9 +200,31 @@ public class ZBowAura extends Module {
         // 玩家或世界不存在时直接返回
         if (mc.player == null || mc.level == null || mc.gameMode == null) return;
 
-        // 射击后的延迟未结束时先等待
-        if (shootDelayLeft > 0) {
-            shootDelayLeft--;
+        // 传送任务进行中
+        if (TpMover.isBusy()) {
+            // 不是本模块发起的传送，等待它结束
+            if (travelTarget == null) return;
+
+            // 推进传送，未到达时直接返回
+            if (!TpMover.moveTo(travelTarget)) return;
+
+            // 回程完成，结束本次任务
+            if (returning) {
+                travelTarget = null;
+                returning = false;
+                TpMover.reset();
+                return;
+            }
+
+            // 目标失效时开始回程
+            if (TargetUtils.isBadTarget(target, range.get())) {
+                returning = true;
+                travelTarget = TpMover.origin();
+                return;
+            }
+
+            // 已在目标附近，直接射击
+            shootStep();
             return;
         }
 
@@ -162,6 +233,33 @@ public class ZBowAura extends Module {
             target = TargetUtils.getPlayerTarget(range.get(), SortPriority.LowestHealth);
             // 没有可用目标时直接返回
             if (TargetUtils.isBadTarget(target, range.get())) return;
+        }
+
+        // 未开启传送时直接在当前位置射击
+        if (!tp.get()) {
+            shootStep();
+            return;
+        }
+
+        // 计算目标旁近距离射击的工作点
+        Vec3 workPoint = PositionSpoofer.feetNear(target.getBoundingBox(), tpDistance.get());
+        // 找不到工作点时直接返回
+        if (workPoint == null) return;
+
+        // 前往工作点，之后一直在此处射击
+        travelTarget = workPoint;
+        returning = false;
+        TpMover.moveTo(workPoint);
+    }
+
+    /**
+     * 执行一次射击流程：切弓、转向、拉满弓、放箭。
+     */
+    private void shootStep() {
+        // 射击后的延迟未结束时先等待
+        if (shootDelayLeft > 0) {
+            shootDelayLeft--;
+            return;
         }
 
         // 没有箭矢时不处理
@@ -193,7 +291,7 @@ public class ZBowAura extends Module {
             return;
         }
 
-        // 蓄力完成后松开弓射击
+        // 蓄力完成后松开弓射击，满蓄力对应最大伤害
         if (mc.player.getTicksUsingItem() >= chargeTicks.get()) {
             mc.gameMode.releaseUsingItem(mc.player);
             // 切回原来的槽位
@@ -204,6 +302,17 @@ public class ZBowAura extends Module {
             // 重置射击后的延迟
             shootDelayLeft = shootDelay.get();
         }
+    }
+
+    /**
+     * 监听收包事件，让传送引擎判断直传是否被服务端拒绝。
+     *
+     * @param event 收包事件
+     */
+    @EventHandler
+    private void onReceive(PacketEvent.Receive event) {
+        // 交给传送引擎判断是否收到位置校正
+        TpMover.handleReceive(event);
     }
 
     /**

@@ -1,7 +1,10 @@
 package com.eason.zcore;
 
+import com.eason.zcore.modules.ZFreecam;
 import com.eason.zcore.modules.ZReach;
+import com.eason.zcore.modules.ZTPAnchorAura;
 import com.eason.zcore.modules.ZTPAura;
+import com.eason.zcore.modules.ZTPCrystalAura;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
@@ -33,6 +36,12 @@ public class MeteorZCore extends MeteorAddon {
         Modules.get().add(new ZReach());
         // 将 Z TP Aura 模块注册到 Meteor 的模块系统
         Modules.get().add(new ZTPAura());
+        // 将 Z TP Crystal Aura 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZTPCrystalAura());
+        // 将 Z TP Anchor Aura 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZTPAnchorAura());
+        // 将 Z Freecam 模块注册到 Meteor 的模块系统
+        Modules.get().add(new ZFreecam());
     }
 
     /**

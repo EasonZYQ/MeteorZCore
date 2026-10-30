@@ -21,8 +21,10 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
  * 所有状态都是全局静态的，由各模块的事件处理器调用对应的处理方法。
  */
 public final class PositionSpoofer {
-    /** 伪造坐标与目标之间保留的距离，必须明显小于服务端允许的交互距离。 */
-    private static final double OFFSET = 3.0;
+    /** 伪造坐标与目标之间保留的最小距离，必须明显小于服务端允许的交互距离。 */
+    private static final double MIN_OFFSET = 2.0;
+    /** 寻找可用坐标时每次向外移动的步长。 */
+    private static final double OFFSET_STEP = 0.5;
     /** 当前客户端 tick 组内是否已经发送过位置包。 */
     private static boolean positionSent;
     /** 是否存在需要在本 tick 结束后还原的伪造坐标。 */
@@ -93,12 +95,16 @@ public final class PositionSpoofer {
     }
 
     /**
-     * 计算伪造的脚部坐标，让眼睛落在距目标碰撞箱 {@link #OFFSET} 格的位置。
+     * 计算伪造的脚部坐标，让眼睛落在距目标碰撞箱一定距离的位置，并尽量避开方块。
+     * <p>
+     * 从距离目标最近的位置开始，沿玩家方向逐步向外尝试，返回第一个不会卡进方块的坐标，
+     * 这样放置方块、破坏方块等需要玩家身体位置合法的动作才能顺利通过服务端校验。
      *
-     * @param target 目标碰撞箱
+     * @param target    目标碰撞箱
+     * @param maxOffset 与目标之间允许的最大距离
      * @return 伪造的脚部坐标，无法计算时返回 null
      */
-    public static Vec3 feetNear(AABB target) {
+    public static Vec3 feetNear(AABB target, double maxOffset) {
         // 玩家不存在时无法计算
         if (mc.player == null) return null;
 
@@ -120,10 +126,26 @@ public final class PositionSpoofer {
         // 眼睛已经在碰撞箱内时无需伪造
         if (direction.lengthSqr() < 1.0E-4) return null;
 
-        // 沿玩家所在方向后退固定距离，得到伪造后的眼睛坐标
-        Vec3 spoofedEye = closest.add(direction.normalize().scale(OFFSET));
-        // 把眼睛坐标换算成脚部坐标，即减去眼睛高度
-        return spoofedEye.subtract(0.0, mc.player.getEyeY() - mc.player.getY(), 0.0);
+        // 归一化方向向量，方便按距离取点
+        Vec3 normalized = direction.normalize();
+        // 眼睛高度，用于把眼睛坐标换算成脚部坐标
+        double eyeHeight = mc.player.getEyeY() - mc.player.getY();
+        // 玩家原始碰撞箱，用于判断候选位置是否卡在方块里
+        AABB playerBox = mc.player.getBoundingBox();
+
+        // 从近到远逐步尝试，返回第一个不会卡进方块的位置
+        for (double offset = MIN_OFFSET; offset <= maxOffset; offset += OFFSET_STEP) {
+            // 沿玩家所在方向后退当前距离，得到伪造后的眼睛坐标
+            Vec3 spoofedEye = closest.add(normalized.scale(offset));
+            // 把眼睛坐标换算成脚部坐标，即减去眼睛高度
+            Vec3 feet = spoofedEye.subtract(0.0, eyeHeight, 0.0);
+            // 把玩家碰撞箱平移到候选位置
+            AABB movedBox = playerBox.move(feet.subtract(mc.player.position()));
+            // 世界不存在或该位置没有碰撞时直接采用
+            if (mc.level == null || mc.level.noCollision(mc.player, movedBox)) return feet;
+        }
+
+        return null;
     }
 
     /**

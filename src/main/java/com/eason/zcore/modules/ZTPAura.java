@@ -1,6 +1,7 @@
 package com.eason.zcore.modules;
 
 import com.eason.zcore.MeteorZCore;
+import com.eason.zcore.utils.ActionSpoofer;
 import com.eason.zcore.utils.PositionSpoofer;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -47,7 +48,7 @@ import java.util.Set;
  * 位置包的发送与还原统一交给 {@link PositionSpoofer} 管理，
  * 避免与 Z Reach 同时开启时出现一个 tick 内两个位置包的情况。
  */
-public class ZTPAura extends Module {
+public class ZTPAura extends Module implements ActionSpoofer.Policy {
     /** 原版服务端允许的实体攻击距离：3.0 格基础距离加 3.0 格缓冲。 */
     private static final double SERVER_ATTACK_RANGE = 6.0;
     /** 原版攻击冷却的取值参数，用于判断攻击是否已经蓄力完成。 */
@@ -67,9 +68,9 @@ public class ZTPAura extends Module {
         // 默认值
         .defaultValue(10.0)
         // 允许输入的数值范围
-        .range(0.0, 20.0)
+        .range(0.0, 1000.0)
         // 滑条显示的数值范围
-        .sliderRange(3.0, 14.0)
+        .sliderRange(3.0, 100.0)
         // 构建出设置对象
         .build()
     );
@@ -222,16 +223,9 @@ public class ZTPAura extends Module {
         // 计算眼睛到主要目标碰撞箱的平方距离
         double distanceSq = primary.getBoundingBox().distanceToSqr(eye);
 
-        // 目标超出服务端允许的攻击距离时，需要先伪造坐标
-        if (distanceSq > SERVER_ATTACK_RANGE * SERVER_ATTACK_RANGE) {
-            // 本 tick 组已被位置包占用时，等待下一个可用的 tick
-            if (PositionSpoofer.isLocked()) return;
-
-            // 计算伪造的脚部坐标
-            Vec3 feet = PositionSpoofer.feetNear(primary.getBoundingBox());
-            // 无法计算坐标或发送失败时放弃本 tick 的攻击
-            if (feet == null || !PositionSpoofer.spoof(feet)) return;
-        }
+        // 目标超出服务端允许的攻击距离时，攻击包会由共享工具类自动插入伪造坐标；
+        // 本 tick 组已被位置包占用时先等待，避免白白浪费一次攻击冷却
+        if (distanceSq > SERVER_ATTACK_RANGE * SERVER_ATTACK_RANGE && PositionSpoofer.isLocked()) return;
 
         // 依次攻击所有筛选出的目标
         for (Entity target : targets) attack(target);
@@ -244,8 +238,29 @@ public class ZTPAura extends Module {
      */
     @EventHandler
     private void onSendPacket(PacketEvent.Send event) {
-        // 处理位置包：占用期间取消客户端自动发送的位置包
-        PositionSpoofer.handleSend(event);
+        // 交给共享工具类按本模块的策略处理
+        ActionSpoofer.handleSend(event, this);
+    }
+
+    /**
+     * 判断某类动作是否允许伪造，供 {@link ActionSpoofer} 调用。
+     *
+     * @param action 动作类型
+     * @return 只有攻击动作返回 true
+     */
+    @Override
+    public boolean allow(ActionSpoofer.Action action) {
+        return action == ActionSpoofer.Action.ATTACK;
+    }
+
+    /**
+     * 返回允许伪造的最大距离，供 {@link ActionSpoofer} 调用。
+     *
+     * @return 最大距离
+     */
+    @Override
+    public double maxDistance() {
+        return range.get();
     }
 
     /**
